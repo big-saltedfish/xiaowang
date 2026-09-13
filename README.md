@@ -4,6 +4,8 @@
 
 基于 QCA Forward 的个人云端研究伙伴：工作日研究、独立复盘、Drive 报告、长期记忆，以及实时语音交流。
 
+[打开小望](https://xiaowang-psi.vercel.app/) · [GitHub](https://github.com/big-saltedfish/xiaowang)
+
 ## 能做什么
 
 - 以同一身份恢复研究空间，重复登录复用已有模板、记忆和计划。

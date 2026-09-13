@@ -4,6 +4,9 @@
   "installCommand": "npm ci --registry=https://registry.npmjs.org",
   "buildCommand": "npm run build",
   "outputDirectory": "dist/client",
+  "rewrites": [
+    { "source": "/api/qca/:region/:route*", "destination": "/api/forward?__qca_region=:region&__qca_route=:route*" }
+  ],
   "functions": {
     "api/**/*.mjs": { "maxDuration": 300 }
   }
