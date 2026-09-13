@@ -114,7 +114,6 @@ function ActiveCall({
   const ctx = useMemo(() => ({ api }), [api]);
   const [draft, setDraft] = useState('');
   const [startError, setStartError] = useState('');
-  const [finishWarning, setFinishWarning] = useState('');
   const session = useVoiceSession({
     ctx,
     identityId: ws.identity.id,
@@ -173,7 +172,7 @@ function ActiveCall({
         </p>
       )}
       {session.historyWarning && (
-        <p className="form-note">{session.historyWarning}</p>
+        <div className="form-note" role="status">{session.historyWarning}<button className="text-action" onClick={() => void session.refreshHistory()}>重新加载记录</button></div>
       )}
       {tasks.length > 0 && (
         <details className="voice-work">
@@ -182,8 +181,8 @@ function ActiveCall({
             (t) =>
               t.kind === 'work' && (
                 <article key={t.id}>
-                  <strong>{t.objective}</strong>
-                  <p>{t.result || t.status}</p>
+                  <strong>{workTitle(t.objective)}</strong>
+                  <p>{t.result || workStatus(t.status, stage === 'ended')}</p>
                 </article>
               ),
           )}
@@ -217,20 +216,12 @@ function ActiveCall({
             </p>
           ) : (
             <article key={entry.id}>
-              <strong>{entry.objective}</strong>
-              <p>{entry.result || entry.status}</p>
+              <strong>{workTitle(entry.objective)}</strong>
+              <p>{entry.result || workStatus(entry.status, stage === 'ended')}</p>
             </article>
           ),
         )}
       </details>
-      {finishWarning && (
-        <div role="alert" className="error-banner">
-          {finishWarning}
-          <button className="text-action" onClick={onClose}>
-            已知晓，返回工作台
-          </button>
-        </div>
-      )}
       <div className="call-controls">
         <button
           aria-pressed={mode === 'text' || session.muted}
@@ -251,14 +242,11 @@ function ActiveCall({
           data-end-call="true"
           disabled={session.stage === 'ending'}
           onClick={() =>
-            void session.end().then((result) => {
-              if (result.warning) setFinishWarning(result.warning);
-              else onClose();
-            })
+            session.stage === 'ended' ? onClose() : void session.end()
           }
         >
           <PhoneOff />
-          <span>挂断</span>
+          <span>{stage === 'ended' ? '返回' : '挂断'}</span>
         </button>
         <button
           aria-pressed={session.speakerMuted}
@@ -285,4 +273,13 @@ function ActiveCall({
       <p className="voice-footer">结束通话，云端计划继续。</p>
     </section>
   );
+}
+
+function workTitle(objective: string) {
+  return objective.includes('/data/') ? '读取研究资料与复盘记录' : objective;
+}
+function workStatus(status: string, ended: boolean) {
+  const labels: Record<string, string> = {completed: '已完成', failed: '执行失败', cancelled: '已取消', accepted: '已安排', running: '正在处理'};
+  if (ended && ['running', 'accepted'].includes(status)) return '上次状态：处理中，正在同步云端结果';
+  return labels[status] || '正在更新状态';
 }

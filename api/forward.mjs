@@ -12,8 +12,12 @@ export default function forward(req, res) {
   if (!['cn', 'global'].includes(region) || !route) {
     res.writeHead(404); res.end(); return;
   }
-  url.searchParams.delete('__qca_region');
-  url.searchParams.delete('__qca_route');
-  req.url = `/api/qca/${region}/${route}${url.search ? url.search : ''}`;
+  // Vercel adds route captures and re-encodes query values during rewrites.
+  // QCA accepts only declared query keys and requires literal Drive separators.
+  for (const key of ['__qca_region', '__qca_route', 'region', 'route']) {
+    url.searchParams.delete(key);
+  }
+  const query = url.searchParams.toString().replace(/%2F/gi, '/');
+  req.url = `/api/qca/${region}/${route}${query ? '?' + query : ''}`;
   return handler(req, res);
 }

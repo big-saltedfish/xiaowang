@@ -21,3 +21,15 @@ void test('history failure is returned to caller instead of disappearing on hang
  const {result}=renderHook(()=>useVoiceSession(options()));await waitFor(()=>expect(result.current.stage).toBe('ended'));mocks.history.mockRejectedValueOnce(new Error('unavailable'));
  let warning:string|undefined;await act(async()=>{warning=(await result.current.end()).warning;});expect(warning).toMatch(/历史记录/);expect(result.current.historyWarning).toMatch(/历史记录/);
 });
+void test('history retry updates finished work without starting another conversation',async()=>{
+ const {result}=renderHook(()=>useVoiceSession(options()));
+ await waitFor(()=>expect(result.current.stage).toBe('ended'));
+ mocks.history.mockRejectedValueOnce(new Error('unavailable'));
+ await act(async()=>{await result.current.refreshHistory();});
+ expect(result.current.historyWarning).toBeTruthy();
+ mocks.history.mockResolvedValueOnce({conversation:{id:'conv_existing'},events:[{id:'done',type:'voice.work.completed',work_id:'work_1',status:'completed',objective:'研究进展',result:'报告已完成',occurred_at:'2026-09-13T12:00:00Z'}],page:{has_more:false,next_before:null}});
+ await act(async()=>{await result.current.refreshHistory();});
+ expect(result.current.historyWarning).toBeNull();
+ expect(result.current.timeline).toEqual(expect.arrayContaining([expect.objectContaining({status:'completed',result:'报告已完成'})]));
+ expect(mocks.construct).not.toHaveBeenCalled();
+});

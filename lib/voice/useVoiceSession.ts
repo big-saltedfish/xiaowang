@@ -401,6 +401,20 @@ export function useVoiceSession(options: VoiceSessionOptions) {
     }
     return { warning };
   }, [conversationId, loadHistory]);
+  const refreshHistory = useCallback(async () => {
+    if (!conversationId) return;
+    try { await loadHistory(conversationId); }
+    catch { setHistoryWarning('暂时无法更新通话记录，请重试。'); }
+  }, [conversationId, loadHistory]);
+  useEffect(() => {
+    if (stage !== 'ended' || !conversationId) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      void refreshHistory();
+      if (++attempts >= 12) clearInterval(timer);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [stage, conversationId, refreshHistory]);
   const continueConversation = useCallback(async () => {
     if (!conversationId) return;
     const run = ++generation.current;
@@ -424,6 +438,7 @@ export function useVoiceSession(options: VoiceSessionOptions) {
     microphoneWarning,
     startNew,
     continueConversation,
+    refreshHistory,
     sendText,
     end,
   };

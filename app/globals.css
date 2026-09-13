@@ -2576,3 +2576,11 @@ body{background:#f7f4ef;color:#292b30}button:focus-visible,a:focus-visible,input
 
 .memory-role-tabs{border:0;padding:0;min-width:0}
 .work-history h1{font-family:'Songti SC',serif;font-size:32px;font-weight:500;margin:10px 0 16px}.work-record{background:#fff9;border:1px solid #e4dacb;border-radius:15px;margin:13px 0;overflow:hidden}.work-record summary{list-style:none;display:flex;align-items:center;gap:16px;padding:18px 22px;cursor:pointer}.work-record summary::-webkit-details-marker{display:none}.work-record summary>span:nth-child(2){flex:1}.work-record strong{font-size:15px;font-weight:550;display:block}.work-record small{display:block;color:#9a8a75;font-size:12px;margin-top:4px}.work-status{padding:10px;border-radius:50%;background:#eee7dc;color:#9b8059;display:flex}.work-status.completed{color:#638059;background:#edf1e7}.work-status.failed{color:#b3614e;background:#f7e9e0}.delivery-state{font-size:12px;color:#928169}.work-record .report-prose{border-top:1px solid #e9dfd0;padding:20px 25px;font-size:15px}.work-record .report-prose p{margin:10px 0}.work-record .report-prose ul{padding-left:20px}
+
+/* Keep long cloud paths and results inside their panels. */
+.archive-layout > *, .archive-list, .voice-room, .voice-work { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.archive-toolbar, .archive-toolbar > div { flex-wrap: wrap; }
+.voice-work { max-height: 280px; overflow: auto; }
+.voice-work article strong { font-weight: 500; }
+.drawer-body { overflow-y: auto; }
+.error-banner .text-action, .form-note .text-action { display: block; margin-top: 10px; }

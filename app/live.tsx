@@ -751,9 +751,11 @@ export function Reports({ api, ws, revision }: ViewProps) {
     [text, setText] = useState(''),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const selection = useRef(0);
   useEffect(() => {
     let canceled = false;
+    setLoading(true);
     void api
       .driveEntries(ws.identity.id, path)
       .then((r) => {
@@ -771,7 +773,7 @@ export function Reports({ api, ws, revision }: ViewProps) {
     return () => {
       canceled = true;
     };
-  }, [api, ws.identity.id, path, revision]);
+  }, [api, ws.identity.id, path, revision, retry]);
   function navigate(next: string) {
     if (next === path) return;
     selection.current++;
@@ -833,12 +835,15 @@ export function Reports({ api, ws, revision }: ViewProps) {
       {error && (
         <div role="alert" className="error-banner">
           {error}
+          <button className="text-action" onClick={() => setRetry((n) => n + 1)}>重新加载目录</button>
         </div>
       )}
       <div className="archive-layout">
         <aside className="archive-list">
           {loading ? (
             <p>正在读取目录…</p>
+          ) : error && !entries.length ? (
+            <p>目录暂时无法加载，请重试。</p>
           ) : entries.length ? (
             entries.map((e) => (
               <button
