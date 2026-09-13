@@ -1,0 +1,1 @@
+Voice transport, audio, timeline and session logic adapted from QoderAI/forward-quickstart at commit 339bfc09f307064051161e124fa5d9f1099ec491 (Apache-2.0). Local changes: QcaClient transport adapter, companion interaction, same-origin proxy configuration.

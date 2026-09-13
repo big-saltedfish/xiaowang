@@ -1,0 +1,176 @@
+import { WebSocket, WebSocketServer } from 'ws';
+export function buildRealtimeUrl(baseUrl, conversationId) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, '')}/realtime`);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.searchParams.set('conversation_id', conversationId);
+  return url;
+}
+export function isAllowedLocalOrigin(origin) {
+  try {
+    const url = new URL(origin || '');
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+export function relayCloseCode(code, fallback) {
+  return (code >= 1000 && code <= 1014 && ![1004, 1005, 1006].includes(code)) ||
+    (code >= 3000 && code <= 4999)
+    ? code
+    : fallback;
+}
+export function createVoiceProxy(options) {
+  const allowedOrigins = new Set(options.allowedOrigins || []);
+  const enabled = (options.allowLocal ?? true) || options.allowSameOrigin === true || allowedOrigins.size > 0;
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
+  let attached = false;
+  function attach(server) {
+    if (attached) return;
+    attached = true;
+    server.on('upgrade', (request, socket, head) => {
+      const url = new URL(request.url || '/', 'http://localhost');
+      const origin = request.headers.origin;
+      const allowed =
+        !!origin &&
+        (allowedOrigins.has(origin) ||
+          (options.allowSameOrigin === true && isSameOrigin(origin, request.headers.host)) ||
+          ((options.allowLocal ?? true) && isAllowedLocalOrigin(origin)));
+      const status =
+        url.pathname !== '/api/voice/socket'
+          ? 404
+          : !enabled || !allowed
+            ? 403
+            : url.search
+              ? 400
+              : 0;
+      if (status) {
+        socket.end(
+          `HTTP/1.1 ${status} Rejected\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
+        );
+        return;
+      }
+      wss.handleUpgrade(request, socket, head, (client) => {
+        let upstream;
+        let authenticated = false;
+        const close = (peer, code, reason) => {
+          if (peer?.readyState === WebSocket.CONNECTING) peer.terminate();
+          else if (peer?.readyState === WebSocket.OPEN)
+            peer.close(relayCloseCode(code, 1011), reason);
+        };
+        const authTimer = setTimeout(
+          () => close(client, 4408, 'authentication timeout'),
+          options.authTimeoutMs ?? 5000,
+        );
+        const lifetime = options.maxConnectionMs
+          ? setTimeout(() => {
+              close(upstream, 1000, 'proxy rotation');
+              close(client, 1012, 'proxy rotation');
+            }, options.maxConnectionMs)
+          : undefined;
+        const relay = (peer, data, binary) => {
+          if (peer?.readyState !== WebSocket.OPEN) return;
+          if (peer.bufferedAmount > 4 * 1024 * 1024) {
+            close(client, 1013, 'slow consumer');
+            close(upstream, 1013, 'slow consumer');
+          } else peer.send(data, { binary });
+        };
+        client.on('message', (data, binary) => {
+          if (client.readyState !== WebSocket.OPEN) return;
+          if (authenticated) {
+            if (upstream?.readyState !== WebSocket.OPEN) {
+              close(client, 4400, 'upstream not ready');
+              return;
+            }
+            relay(upstream, data, binary);
+            return;
+          }
+          const authText = Buffer.isBuffer(data)
+            ? data.toString('utf8')
+            : Array.isArray(data)
+              ? Buffer.concat(data).toString('utf8')
+              : Buffer.from(data).toString('utf8');
+          let auth;
+          try {
+            auth = JSON.parse(authText);
+          } catch {
+            close(client, 4400, 'invalid authentication');
+            return;
+          }
+          if (
+            binary ||
+            authText.length > 16384 ||
+            auth?.type !== 'proxy.auth' ||
+            typeof auth.pat !== 'string' ||
+            !auth.pat.trim() ||
+            /[\r\n]/.test(auth.pat) ||
+            typeof auth.conversation_id !== 'string' ||
+            !auth.conversation_id.trim() ||
+            !['cn-prod', 'global-prod'].includes(auth.environment)
+          ) {
+            close(client, 4400, 'invalid authentication');
+            return;
+          }
+          authenticated = true;
+          clearTimeout(authTimer);
+          upstream = new WebSocket(
+            buildRealtimeUrl(
+              options.baseUrls[auth.environment],
+              auth.conversation_id,
+            ),
+            {
+              headers: { Authorization: `Bearer ${auth.pat}` },
+              handshakeTimeout: 15000,
+              maxPayload: 1024 * 1024,
+            },
+          );
+          upstream.on('message', (message, isBinary) =>
+            relay(client, message, isBinary),
+          );
+          upstream.on('unexpected-response', (_req, response) => {
+            const status = response.statusCode;
+            response.resume();
+            close(
+              client,
+              status === 401
+                ? 4401
+                : status === 403
+                  ? 4403
+                  : status === 404
+                    ? 4404
+                    : 1011,
+              'upstream rejected connection',
+            );
+            upstream?.terminate();
+          });
+          upstream.on('error', () =>
+            close(client, 1011, 'upstream unavailable'),
+          );
+          upstream.on('close', (code) =>
+            close(
+              client,
+              code === 1000 ? 1000 : relayCloseCode(code, 1011),
+              'upstream closed',
+            ),
+          );
+        });
+        client.on('close', () => {
+          clearTimeout(authTimer);
+          clearTimeout(lifetime);
+          close(upstream, 1000, 'client closed');
+        });
+        client.on('error', () => close(upstream, 1011, 'client error'));
+      });
+    });
+  }
+  return { enabled, attach };
+}
+
+function isSameOrigin(origin, host) {
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === 'https:' && parsed.host === host;
+  } catch { return false; }
+}
